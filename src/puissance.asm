@@ -452,11 +452,12 @@ choix_debutant ld a,#1 ; mode 1 debutant
 choix_intermediaire
     ld a,1 : ld (nbPlayer),a
     ld a,1 : ld (newDifficulty),a
+    jr clear_before_play
 
 choix_avance
     ld a,1 : ld (nbPlayer),a
     ld a,2 : ld (newDifficulty),a
-
+    jr clear_before_play
 
 choix_difficile ld a,#1 ; mode 1 difficile
     ld (nbPlayer),a
