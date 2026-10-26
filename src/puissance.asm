@@ -1250,7 +1250,7 @@ niveau_difficile     defb '4: DIFFICILE',#00 ; text: 2 = DIFFICILE
 niveau_deux_joueurs  defb '5: DEUX JOUEURS',0 ; text: 3 = DEUX JOUEURS
 
 
-table_priorite_colonnes DEFB #03,#02,#04,#01,#05,#00 ; difficulty move priority table
+table_priorite_colonnes DEFB 3,2,4,1,5,0,6 ; difficulty move priority table
 table_priorite_naive    defb 1,6,0,5,2,4,3
 
 
