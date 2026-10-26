@@ -443,8 +443,6 @@ lab8399 call #bb06 ; vector KM_WAIT_CHAR ; read menu selection
     jr z,choix_deux_joueurs
     jr lab8399
 
-difficulte_fine defb 0
-
 choix_debutant ld a,#1 ; mode 1 debutant
     ld (nbPlayer),a
     ld (legacyDifficulty),a
@@ -601,6 +599,7 @@ lab84B4 ld a,#2 ; computer (AI) move
     jr c,lab8513
 
     ld a,(newDifficulty)
+    or a : jr z,ResetColumnScan
     dec a : jr z,ResetColumnScan
     dec a : jr z,unSurDeux
     dec a : jr z,troisSurQuatre
