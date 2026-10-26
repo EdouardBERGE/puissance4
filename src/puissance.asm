@@ -5,8 +5,8 @@ org #8000 ; program origin / load address
 
 ; code: game logic and routines
 lab8000 xor a ; entry point: init inks/mode, draw board, main loop
-    ld (lab88F3),a
-    ld (lab88F2),a
+    ld (MovesPlayedCount),a
+    ld (GameOverWinFlag),a
     ld a,#0
     call #bc0e ; vector SCR_SET_MODE
     ld a,#0
@@ -60,87 +60,88 @@ lab8000 xor a ; entry point: init inks/mode, draw board, main loop
     ld b,#0
     ld c,#0
     call #bc38 ; vector SCR_SET_BORDER
-    call lab8305
+    call InitScreenAndMenu
     ld hl,#c05c
     ld c,#38
     ld b,#c0
     ld a,#c0
-    call lab8899
-    call lab866B
-    call lab86CC
+    call FillHorizontalBytes
+    call DrawBoardFrame
+    call DrawGrid
     ld hl,#e05d
     ld a,#6
-    ld (lab88D6),a
+    ld (TempRowCounter),a
 lab809C push hl ; draw board rows loop
     ld a,#7
-    ld (lab88D7),a
+    ld (TempColumnCounter),a
 lab80A2 push hl ; draw board columns loop
-    call lab8753
-    call lab863F
+    call DrawPieceSprite
+    call EraseSpriteCell
     pop hl
     ld de,#8
     add hl,de
-    ld a,(lab88D7)
+    ld a,(TempColumnCounter)
     dec a
-    ld (lab88D7),a
+    ld (TempColumnCounter),a
     jr nz,lab80A2
     pop hl
     ld de,#140
     add hl,de
-    ld a,(lab88D6)
+    ld a,(TempRowCounter)
     dec a
-    ld (lab88D6),a
+    ld (TempRowCounter),a
     jr nz,lab809C
-    call lab8722
+    call DrawBottomBorder
     ld hl,lab890C
     ld de,lab890D
     ld bc,#29
     ld (hl),#0
     ldir
     xor a
-    ld (lab88D8),a
+    ld (SelectedColumn),a
     ld a,#1
-    ld (lab88D9),a
+    ld (CurrentPlayer),a
 lab80DE ld a,(nbPlayer) ; main game loop
     cp #1
     jr nz,lab80F8
-    ld a,(lab88D9)
+    ld a,(CurrentPlayer)
     cp #2
     jr nz,lab80F8
-    call lab8408
-    call lab8408
+    call ShortDelay
+    call ShortDelay
     call lab84B4
-    jp lab8134
+    jp DropDiscIntoSelectedColumn
 lab80F8 call lab81BB ; handle keyboard input
-    call lab81D4
+    call DrawCursor
     call #bb06 ; vector KM_WAIT_CHAR
     push af
     ld a,#0
-    call lab81D4
+    call DrawCursor
     pop af
     cp #f2
     jr z,lab811A
     cp #f3
     jr z,lab8126
     cp #20
-    jr z,lab8134
+    jr z,DropDiscIntoSelectedColumn
     cp #fc
     jr z,lab8133
     jr lab80DE
-lab811A ld a,(lab88D8) ; cursor left
+lab811A ld a,(SelectedColumn) ; cursor left
     or a
     jr z,lab80DE
     dec a
-    ld (lab88D8),a
+    ld (SelectedColumn),a
     jr lab80DE
-lab8126 ld a,(lab88D8) ; cursor right
+lab8126 ld a,(SelectedColumn) ; cursor right
     cp #6
     jr z,lab80DE
     inc a
-    ld (lab88D8),a
+    ld (SelectedColumn),a
     jr lab80DE
 lab8133 ret  ; quit game
-lab8134 ld a,(lab88D8) ; drop disc into selected column
+
+DropDiscIntoSelectedColumn ld a,(SelectedColumn) ; drop disc into selected column
     ld e,a
     ld d,#0
     ld hl,lab890C
@@ -163,53 +164,54 @@ lab8144 ld a,b ; find first empty row in column
     add hl,de
     inc b
     jr lab8144
-lab815A ld a,(lab88D9) ; place disc, animate drop, check win
+lab815A ld a,(CurrentPlayer) ; place disc, animate drop, check win
     ld (hl),a
     ld a,b
-    ld (lab88D9+2),a
+    ld (CurrentPlayer+2),a
     xor a
-    ld (lab88D9+1),a
-lab8166 ld a,(lab88D9+1) ; animate falling disc
+    ld (CurrentPlayer+1),a
+lab8166 ld a,(CurrentPlayer+1) ; animate falling disc
     ld b,a
-    call lab81E1
+    call ScreenAddressForBoardCell
     call lab81BB
     ld c,a
     ld ix,lab8936
-    call lab8622
-    ld a,(lab88D9+1)
-    ld hl,lab88D9+2
+    call DrawSpriteUsingColorMask
+    ld a,(CurrentPlayer+1)
+    ld hl,CurrentPlayer+2
     cp (hl)
     jr z,lab8194
     call lab81F7
-    ld a,(lab88D9+1)
+    ld a,(CurrentPlayer+1)
     ld b,a
-    call lab81E1
-    call lab863F
-    ld hl,lab88D9+1
+    call ScreenAddressForBoardCell
+    call EraseSpriteCell
+    ld hl,CurrentPlayer+1
     inc (hl)
     jr lab8166
 lab8194 ld hl,#1de ; after move: sound, win check, turn switch
     call lab82FB
-    call lab825A
-    ld a,(lab88F2)
+    call CheckFourInARow
+    ld a,(GameOverWinFlag)
     or a
-    jp nz,lab8201
-    ld a,(lab88F3)
+    jp nz,GameOverSequence
+    ld a,(MovesPlayedCount)
     inc a
-    ld (lab88F3),a
+    ld (MovesPlayedCount),a
     cp #2a
     jp z,lab821F
-    ld a,(lab88D9)
+    ld a,(CurrentPlayer)
     xor #3
-    ld (lab88D9),a
+    ld (CurrentPlayer),a
     jp lab80DE
-lab81BB ld a,(lab88D9) ; current player color mask
+lab81BB ld a,(CurrentPlayer) ; current player color mask
     cp #1
     ld a,#cc
     ret z
     ld a,#c
     ret 
-lab81C6 ld a,(lab88D8) ; screen address for cursor column
+
+ScreenAddressForCursorColumn ld a,(SelectedColumn) ; screen address for cursor column
     add a,a
     add a,a
     add a,a
@@ -218,15 +220,17 @@ lab81C6 ld a,(lab88D8) ; screen address for cursor column
     ld hl,#c00d
     add hl,de
     ret 
-lab81D4 push af ; draw cursor
-    call lab81C6
+
+DrawCursor push af ; draw cursor
+    call ScreenAddressForCursorColumn
     pop af
     ld c,#6
     ld b,#6
-    call lab8899
+    call FillHorizontalBytes
     ret 
-lab81E1 ld hl,#e05d ; screen address for board cell
-    ld a,(lab88D8)
+
+ScreenAddressForBoardCell ld hl,#e05d ; screen address for board cell
+    ld a,(SelectedColumn)
     add a,a
     add a,a
     add a,a
@@ -245,7 +249,8 @@ lab81F9 push bc
     pop bc
     djnz lab81F9
     ret 
-lab8201 ld hl,#1de ; game over sequence
+
+GameOverSequence ld hl,#1de ; game over sequence
     call lab82FB
     ld hl,#17c
     call lab82FB
@@ -287,61 +292,63 @@ lab8254 djnz lab824F ; code
     dec e
     jr nz,lab8230
     ret 
-lab825A xor a ; check four-in-a-row
-    ld (lab88F2),a
-    ld a,(lab88D8)
-    ld (lab88F5),a
-    ld a,(lab88D9+2)
-    ld (lab88F6),a
-    ld ix,lab88FB
+
+CheckFourInARow xor a ; check four-in-a-row
+    ld (GameOverWinFlag),a
+    ld a,(SelectedColumn)
+    ld (LastPlacedPieceRow),a
+    ld a,(CurrentPlayer+2)
+    ld (LastPlacedPieceColumn),a
+    ld ix,AIDirectionVectors
     ld b,#4
 lab8270 push bc ; code
     ld a,#1
-    ld (lab88F4),a
+    ld (AIFillCount),a
     ld a,(ix+0)
-    ld (lab88F7),a
+    ld (AIStepRowDelta),a
     ld a,(ix+1)
-    ld (lab88F8),a
-    call lab82B8
-    ld a,(lab88F7)
+    ld (AIStepColumnDelta),a
+    call StepDirectionWhileChecking
+    ld a,(AIStepRowDelta)
     neg
-    ld (lab88F7),a
-    ld a,(lab88F8)
+    ld (AIStepRowDelta),a
+    ld a,(AIStepColumnDelta)
     neg
-    ld (lab88F8),a
-    call lab82B8
-    ld a,(lab88F4)
+    ld (AIStepColumnDelta),a
+    call StepDirectionWhileChecking
+    ld a,(AIFillCount)
     cp #4
     jr c,lab82B0
     ld a,#1
-    ld (lab88F2),a
+    ld (GameOverWinFlag),a
     ld a,(ix+0)
-    ld (lab88DC),a
+    ld (WinDirectionRowDelta),a
     ld a,(ix+1)
-    ld (lab88DD),a
+    ld (WinDirectionColumnDelta),a
 lab82B0 inc ix
     inc ix
     pop bc
     djnz lab8270
     ret 
-lab82B8 ld a,(lab88F5) ; step direction while checking
-    ld (lab88F9),a
-    ld a,(lab88F6)
-    ld (lab88FA),a
-lab82C4 ld a,(lab88F9) ; walk board cells in direction
-    ld hl,lab88F7
+
+StepDirectionWhileChecking ld a,(LastPlacedPieceRow) ; step direction while checking
+    ld (AITestCellRow),a
+    ld a,(LastPlacedPieceColumn)
+    ld (AITestCellColumn),a
+lab82C4 ld a,(AITestCellRow) ; walk board cells in direction
+    ld hl,AIStepRowDelta
     add a,(hl)
-    ld (lab88F9),a
+    ld (AITestCellRow),a
     cp #7
     ret nc
-    ld a,(lab88FA)
-    ld hl,lab88F8
+    ld a,(AITestCellColumn)
+    ld hl,AIStepColumnDelta
     add a,(hl)
-    ld (lab88FA),a
+    ld (AITestCellColumn),a
     cp #6
     ret nc
     ld b,a
-    ld a,(lab88F9)
+    ld a,(AITestCellRow)
     ld c,a
     ld a,b
     add a,a
@@ -353,75 +360,76 @@ lab82C4 ld a,(lab88F9) ; walk board cells in direction
     ld d,#0
     ld hl,lab890C
     add hl,de
-    ld a,(lab88D9)
+    ld a,(CurrentPlayer)
     cp (hl)
     ret nz
-    ld hl,lab88F4
+    ld hl,AIFillCount
     inc (hl)
     jr lab82C4
-lab82FB ld (lab8906),hl ; play sound effect
-    ld hl,lab8901+2
+lab82FB ld (SoundPointerTemp),hl ; play sound effect
+    ld hl,SoundDataBlock+2
     call #bcaa ; vector SOUND_QUEUE
     ret 
-lab8305 ld hl,#c000 ; init screen and menu
+
+InitScreenAndMenu ld hl,#c000 ; init screen and menu
     ld c,#50
     ld b,#c8
-    call lab86E1
+    call FillScreenAreaFromTable
     ld hl,#d057
     ld de,lab8F5A
-    call lab8784
+    call DrawGlyphString
     ld hl,#f19b
     ld de,lab8F64
-    call lab8784
+    call DrawGlyphString
     ld hl,#c9e4
     ld c,#cc
-    call lab8622
+    call DrawSpriteUsingColorMask
     ld hl,#ca26
     ld c,#c
-    call lab8622
+    call DrawSpriteUsingColorMask
     ld hl,#dc15
     ld c,#46
     ld b,#32
     ld a,#fc
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#e416
     ld c,#44
     ld b,#30
     ld a,#0
-    call lab8899
+    call FillHorizontalBytes
 
     ld a,#4 : call #bb90 ; vector TXT_SET_PEN
     ld h,#3 :  ld l,#f : call #bb75 ; vector TXT_SET_CURSOR
-    ld hl,niveau_debutant : call lab83C9
+    ld hl,niveau_debutant : call PrintZeroTerminatedString
 
     ld h,#3 :  ld l,#10 : call #bb75 ; vector TXT_SET_CURSOR
-    ld hl,niveau_intermediaire : call lab83C9
+    ld hl,niveau_intermediaire : call PrintZeroTerminatedString
 
     ld a,#a : call #bb90 ; vector TXT_SET_PEN
     ld h,#3 :  ld l,#11 : call #bb75 ; vector TXT_SET_CURSOR
-    ld hl,niveau_avance : call lab83C9
+    ld hl,niveau_avance : call PrintZeroTerminatedString
 
     ld h,#3 :  ld l,#12 : call #bb75 ; vector TXT_SET_CURSOR
-    ld hl,niveau_difficile : call lab83C9
+    ld hl,niveau_difficile : call PrintZeroTerminatedString
 
     ld a,#3 : call #bb90 ; vector TXT_SET_PEN
     ld h,#3 : ld l,#13 : call #bb75 ; vector TXT_SET_CURSOR
-    ld hl,niveau_deux_joueurs :  call lab83C9
+    ld hl,niveau_deux_joueurs :  call PrintZeroTerminatedString
 
     ld a,#4 : call #bb90 ; vector TXT_SET_PEN
     ld h,#1 : ld l,#17 : call #bb75 ; vector TXT_SET_CURSOR
-    ld hl,copyright :  call lab83C9
+    ld hl,copyright :  call PrintZeroTerminatedString
 
     ld a,#4 : call #bb90 ; vector TXT_SET_PEN
     ld h,#1 : ld l,#18 : call #bb75 ; vector TXT_SET_CURSOR
-    ld hl,copy2 :  call lab83C9
+    ld hl,copy2 :  call PrintZeroTerminatedString
 
     ld a,#4 : call #bb90 ; vector TXT_SET_PEN
     ld h,#1 : ld l,#19 : call #bb75 ; vector TXT_SET_CURSOR
-    ld hl,oldcopyright :  call lab83C9
+    ld hl,oldcopyright :  call PrintZeroTerminatedString
 
-lab8394 call #bb09 ; vector KM_READ_CHAR ; wait key release
-    jr c,lab8394
+WaitKeyRelease call #bb09 ; vector KM_READ_CHAR ; wait key release
+    jr c,WaitKeyRelease
 lab8399 call #bb06 ; vector KM_WAIT_CHAR ; read menu selection
     cp #31
     jr z,choix_debutant
@@ -465,84 +473,87 @@ clear_before_play call #bc14 ; vector SCR_CLEAR ; clear screen and return
     ret
 
 
-lab83C9 ld a,(hl) ; print zero-terminated string
+PrintZeroTerminatedString ld a,(hl) ; print zero-terminated string
     or a
     ret z
     push hl
     call #bb5a ; vector TXT_OUTPUT
     pop hl
     inc hl
-    jr lab83C9
+    jr PrintZeroTerminatedString
 lab83D4 ld a,#8 ; game over animation
-    ld (lab88DF),a
+    ld (WinAnimationCounter),a
 lab83D9 ld a,#30 ; game over draw loop
-    ld (lab88DE),a
-    call lab8412
-    call lab8408
+    ld (AnimationMask),a
+    call AnimateWinningDiscRemoval
+    call ShortDelay
     call lab81BB
-    ld (lab88DE),a
-    call lab8412
-    call lab8408
-    ld hl,lab88DF
+    ld (AnimationMask),a
+    call AnimateWinningDiscRemoval
+    call ShortDelay
+    ld hl,WinAnimationCounter
     dec (hl)
     jr nz,lab83D9
     ld a,#30
-    ld (lab88DE),a
-    call lab8412
+    ld (AnimationMask),a
+    call AnimateWinningDiscRemoval
     ld b,#4
 lab8400 push bc ; code
-    call lab8408
+    call ShortDelay
     pop bc
     djnz lab8400
     ret 
-lab8408 ld b,#c ; short delay
+
+ShortDelay ld b,#c ; short delay
 lab840A push bc
     call #bd19 ; vector MC_WAIT_FLYBACK
     pop bc
     djnz lab840A
     ret 
-lab8412 ld a,(lab88F5) ; animate winning disc removal
-    ld (lab88F9),a
-    ld a,(lab88F6)
-    ld (lab88FA),a
-    call lab848B
-    ld a,(lab88DC)
-    ld (lab88F7),a
-    ld a,(lab88DD)
-    ld (lab88F8),a
-    call lab8444
-    ld a,(lab88DC)
+
+AnimateWinningDiscRemoval ld a,(LastPlacedPieceRow) ; animate winning disc removal
+    ld (AITestCellRow),a
+    ld a,(LastPlacedPieceColumn)
+    ld (AITestCellColumn),a
+    call DrawDiscAtCell
+    ld a,(WinDirectionRowDelta)
+    ld (AIStepRowDelta),a
+    ld a,(WinDirectionColumnDelta)
+    ld (AIStepColumnDelta),a
+    call StepCellInDirection
+    ld a,(WinDirectionRowDelta)
     neg
-    ld (lab88F7),a
-    ld a,(lab88DD)
+    ld (AIStepRowDelta),a
+    ld a,(WinDirectionColumnDelta)
     neg
-    ld (lab88F8),a
-    call lab8444
+    ld (AIStepColumnDelta),a
+    call StepCellInDirection
     ret 
-lab8444 ld a,(lab88F5) ; step cell in direction
-    ld (lab88F9),a
-    ld a,(lab88F6)
-    ld (lab88FA),a
-lab8450 ld a,(lab88F9) ; code
-    ld hl,lab88F7
+
+StepCellInDirection ld a,(LastPlacedPieceRow) ; step cell in direction
+    ld (AITestCellRow),a
+    ld a,(LastPlacedPieceColumn)
+    ld (AITestCellColumn),a
+lab8450 ld a,(AITestCellRow) ; code
+    ld hl,AIStepRowDelta
     add a,(hl)
-    ld (lab88F9),a
+    ld (AITestCellRow),a
     cp #7
     ret nc
-    ld a,(lab88FA)
-    ld hl,lab88F8
+    ld a,(AITestCellColumn)
+    ld hl,AIStepColumnDelta
     add a,(hl)
-    ld (lab88FA),a
+    ld (AITestCellColumn),a
     cp #6
     ret nc
     ld b,a
-    ld a,(lab88F9)
+    ld a,(AITestCellRow)
     ld c,a
     call lab847C
-    ld hl,lab88D9
+    ld hl,CurrentPlayer
     cp (hl)
     ret nz
-    call lab848B
+    call DrawDiscAtCell
     jr lab8450
 lab847C ld a,b ; board cell lookup
     add a,a
@@ -556,16 +567,18 @@ lab847C ld a,b ; board cell lookup
     add hl,de
     ld a,(hl)
     ret 
-lab848B ld a,(lab88FA) ; draw disc at cell
+
+DrawDiscAtCell ld a,(AITestCellColumn) ; draw disc at cell
     ld b,a
-    ld a,(lab88F9)
-    call lab84A1
-    ld a,(lab88DE)
+    ld a,(AITestCellRow)
+    call ScreenAddressForCell
+    ld a,(AnimationMask)
     ld c,a
     ld ix,lab8936
-    call lab8622
+    call DrawSpriteUsingColorMask
     ret 
-lab84A1 ld hl,#e05d ; screen address for cell
+
+ScreenAddressForCell ld hl,#e05d ; screen address for cell
     add a,a
     add a,a
     add a,a
@@ -579,73 +592,73 @@ lab84AF dec b
     add hl,de
     jr lab84AF
 lab84B4 ld a,#2 ; computer (AI) move
-    ld (lab88E2),a
-    call lab85CE
+    ld (AISearchMode),a
+    call FindImmediateWinningMove
     jr c,lab8513
     ld a,#1
-    ld (lab88E2),a
-    call lab85CE
+    ld (AISearchMode),a
+    call FindImmediateWinningMove
     jr c,lab8513
 
     ld a,(newDifficulty)
-    dec a : jr z,lab84F2
+    dec a : jr z,ResetColumnScan
     dec a : jr z,unSurDeux
     dec a : jr z,troisSurQuatre
     jr tester_victoire_adversaire ; difficulté max, on teste tout le temps
 
-unSurDeux ld a,%10101010 : rlca : ld (unSurDeux+1),a : jr c,lab84F2 : jr tester_victoire_adversaire
+unSurDeux ld a,%10101010 : rlca : ld (unSurDeux+1),a : jr c,ResetColumnScan : jr tester_victoire_adversaire
 
-troisSurQuatre ld a,%10001000 : rlca : ld (troisSurQuatre+1),a : jr c,lab84F2 : jr tester_victoire_adversaire
+troisSurQuatre ld a,%10001000 : rlca : ld (troisSurQuatre+1),a : jr c,ResetColumnScan : jr tester_victoire_adversaire
 
 tester_victoire_adversaire
     xor a
-    ld (lab88E4),a
+    ld (AIColumnScan),a
 lab84D3 call lab8519 ; search winning move for player 2
-    ld (lab88E5),a
+    ld (AICandidateColumn),a
     ld c,a
-    call lab860E
+    call FreeCellsInColumn
     cp #ff
     jr z,lab84E7
-    call lab855A
+    call EvaluateCandidateMove
     or a
     jr z,lab850D
-lab84E7 ld a,(lab88E4) ; turn switch after AI
+lab84E7 ld a,(AIColumnScan) ; turn switch after AI
     inc a
-    ld (lab88E4),a
+    ld (AIColumnScan),a
     cp #7
     jr c,lab84D3
 
 
-lab84F2 xor a ; reset column scan
-    ld (lab88E4),a
+ResetColumnScan xor a ; reset column scan
+    ld (AIColumnScan),a
 lab84F6 call lab8519 ; search (second pass)
-    ld (lab88E5),a
+    ld (AICandidateColumn),a
     ld c,a
-    call lab860E
+    call FreeCellsInColumn
     cp #ff
     jr nz,lab850D
-    ld a,(lab88E4)
+    ld a,(AIColumnScan)
     inc a
-    ld (lab88E4),a
+    ld (AIColumnScan),a
     jr lab84F6
-lab850D ld a,(lab88E5) ; column found
-    ld (lab88D8),a
+lab850D ld a,(AICandidateColumn) ; column found
+    ld (SelectedColumn),a
 lab8513 ld a,#2 ; code
-    ld (lab88D9),a
+    ld (CurrentPlayer),a
     ret 
 
 ; scan des colonnes
 lab8519
     ld hl,table_priorite_colonnes
     ld a,(newDifficulty) : cp 3 : jr nz,.table_normale : ld hl,table_priorite_naive : .table_normale ; niveau 3 choisi un scan différent des colonnes
-    ld a,(lab88E4) ; difficulty move table
+    ld a,(AIColumnScan) ; difficulty move table
     ld e,a
     ld d,#0
     add hl,de
     ld a,(hl)
     ret 
 
-lab8525 push af ; write cell value
+WriteCellValue push af ; write cell value
     ld a,b
     add a,a
     add a,a
@@ -659,112 +672,119 @@ lab8525 push af ; write cell value
     pop af
     ld (hl),a
     ret 
-lab8536 xor a ; count pieces in column
-    ld (lab88E9),a
-    ld (lab88EA),a
-lab853D ld a,(lab88EA)
+
+CountPiecesInColumn xor a ; count pieces in column
+    ld (AIEmptyCount),a
+    ld (AILoopIndex),a
+lab853D ld a,(AILoopIndex)
     ld c,a
-    call lab85F1
+    call TestIfMoveWins
     or a
     jr z,lab854B
-    ld hl,lab88E9
+    ld hl,AIEmptyCount
     inc (hl)
-lab854B ld a,(lab88EA)
+lab854B ld a,(AILoopIndex)
     inc a
-    ld (lab88EA),a
+    ld (AILoopIndex),a
     cp #7
     jr c,lab853D
-    ld a,(lab88E9)
+    ld a,(AIEmptyCount)
     ret 
-lab855A ld a,(lab88E5) ; evaluate candidate move
+
+EvaluateCandidateMove ld a,(AICandidateColumn) ; evaluate candidate move
     ld c,a
-    call lab860E
-    ld (lab88E6),a
+    call FreeCellsInColumn
+    ld (AIBestColumn),a
     ld b,a
-    ld a,(lab88E5)
+    ld a,(AICandidateColumn)
     ld c,a
     ld a,#2
-    call lab8525
+    call WriteCellValue
     ld a,#1
-    ld (lab88E2),a
-    call lab8536
+    ld (AISearchMode),a
+    call CountPiecesInColumn
     or a
     jr nz,lab85BD
     xor a
-    ld (lab88E8),a
-lab857D ld a,(lab88E8) ; iterate board columns
+    ld (AISavedColumn),a
+lab857D ld a,(AISavedColumn) ; iterate board columns
     ld c,a
-    call lab860E
+    call FreeCellsInColumn
     cp #ff
     jr z,lab85AF
-    ld (lab88E7),a
+    ld (AISavedRow),a
     ld b,a
-    ld a,(lab88E8)
+    ld a,(AISavedColumn)
     ld c,a
     ld a,#1
-    call lab8525
+    call WriteCellValue
     ld a,#1
-    ld (lab88E2),a
-    call lab8536
+    ld (AISearchMode),a
+    call CountPiecesInColumn
     push af
-    ld a,(lab88E7)
+    ld a,(AISavedRow)
     ld b,a
-    ld a,(lab88E8)
+    ld a,(AISavedColumn)
     ld c,a
     xor a
-    call lab8525
+    call WriteCellValue
     pop af
     cp #2
     jr nc,lab85BD
-lab85AF ld a,(lab88E8)
+lab85AF ld a,(AISavedColumn)
     inc a
-    ld (lab88E8),a
+    ld (AISavedColumn),a
     cp #7
     jr c,lab857D
     xor a
     jr lab85BF
 lab85BD ld a,#1
 lab85BF push af
-    ld a,(lab88E6)
+    ld a,(AIBestColumn)
     ld b,a
-    ld a,(lab88E5)
+    ld a,(AICandidateColumn)
     ld c,a
     xor a
-    call lab8525
+    call WriteCellValue
     pop af
     ret 
-lab85CE xor a ; find immediate winning move
-    ld (lab88E3),a
-lab85D2 ld a,(lab88E3) ; scan columns
+
+FindImmediateWinningMove xor a ; find immediate winning move
+    ld (AILoopCounter),a
+lab85D2 ld a,(AILoopCounter) ; scan columns
     ld c,a
-    call lab85F1
+    call TestIfMoveWins
     or a
-    jr nz,lab85E9
-    ld a,(lab88E3)
+    jr nz,WinningColumnFound
+    ld a,(AILoopCounter)
     inc a
-    ld (lab88E3),a
+    ld (AILoopCounter),a
     cp #7
     jr c,lab85D2
     or a
     ret 
-lab85E9 ld a,(lab88E3) ; winning column found
-    ld (lab88D8),a
+
+WinningColumnFound ld a,(AILoopCounter) ; winning column found
+    ld (SelectedColumn),a
     scf
     ret 
-lab85F1 call lab860E ; test if move wins
+
+TestIfMoveWins call FreeCellsInColumn ; test if move wins
     cp #ff
     jr z,lab860C
-    ld (lab88D9+2),a
+    ld (CurrentPlayer+2),a
     ld a,c
-    ld (lab88D8),a
-    ld a,(lab88E2)
-    ld (lab88D9),a
-    call lab825A
-    ld a,(lab88F2)
+    ld (SelectedColumn),a
+    ld a,(AISearchMode)
+    ld (CurrentPlayer),a
+    call CheckFourInARow
+    ld a,(GameOverWinFlag)
     ret 
+
 lab860C xor a
     ret 
-lab860E ld b,#5 ; free cells in column
+
+FreeCellsInColumn ld b,#5 ; free cells in column
 lab8610 call lab847C ; code
     or a
     jr z,lab861D
@@ -775,24 +795,29 @@ lab8610 call lab847C ; code
     jr lab8610
 lab861D ld a,b
     ret 
+
 lab861F ld a,#ff
     ret 
-lab8622 ld a,c ; draw sprite using color mask
+
+DrawSpriteUsingColorMask ld a,c ; draw sprite using color mask
     cp #cc
-    ld ix,lab8A15+1
+    ld ix,CursorAndMenuSpriteMasks+1
     jr z,lab863B
     cp #c
     ld ix,lab8B36
     jr z,lab863B
     ld ix,lab8936
-    call lab88B2
+    call XorMaskUpdate
     ret 
-lab863B call lab8647
+
+lab863B call RenderGlyphBlock
     ret 
-lab863F ld ix,lab8C56 ; erase sprite/cell
-    call lab8647
+
+EraseSpriteCell ld ix,lab8C56 ; erase sprite/cell
+    call RenderGlyphBlock
     ret 
-lab8647 ld e,#18 ; render glyph block
+
+RenderGlyphBlock ld e,#18 ; render glyph block
 lab8649 push hl ; code
     ld d,#6
 lab864C ld a,(hl)
@@ -814,59 +839,62 @@ lab864C ld a,(hl)
 lab8667 dec e ; code
     jr nz,lab8649
     ret 
-lab866B ld hl,#c008 ; draw board frame
+
+DrawBoardFrame ld hl,#c008 ; draw board frame
     ld c,#1
     ld b,#c8
     ld a,#3
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#c009
     ld c,#2
     ld b,#c8
     ld a,#fc
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#c00b
     ld c,#1
     ld b,#c8
     ld a,#30
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#c047
     ld c,#1
     ld b,#c8
     ld a,#3
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#c045
     ld c,#2
     ld b,#c8
     ld a,#fc
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#c044
     ld c,#1
     ld b,#c8
     ld a,#30
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#f008
     ld c,#40
     ld b,#1
     ld a,#fc
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#f808
     ld c,#40
     ld b,#1
     ld a,#30
-    call lab8899
+    call FillHorizontalBytes
     ret 
-lab86CC ld hl,#c000 ; draw grid
+
+DrawGrid ld hl,#c000 ; draw grid
     ld c,#8
     ld b,#c8
-    call lab86E1
+    call FillScreenAreaFromTable
     ld hl,#c048
     ld c,#8
     ld b,#c8
-    call lab86E1
+    call FillScreenAreaFromTable
     ret 
-lab86E1 ld ix,lab8D76 ; fill screen area from table
+
+FillScreenAreaFromTable ld ix,lab8D76 ; fill screen area from table
     ld a,#8
-    ld (lab88EB),a
+    ld (RenderLoopCounter),a
 lab86EA push bc
     push hl
     ld d,c
@@ -883,13 +911,13 @@ lab86ED ld a,(ix+0)
     pop bc
     inc ix
     inc ix
-    ld a,(lab88EB)
+    ld a,(RenderLoopCounter)
     dec a
-    ld (lab88EB),a
+    ld (RenderLoopCounter),a
     jr nz,lab8713
     ld ix,lab8D76
     ld a,#8
-    ld (lab88EB),a
+    ld (RenderLoopCounter),a
 lab8713 ld a,h ; code
     add a,#8
     ld h,a
@@ -900,35 +928,38 @@ lab8713 ld a,h ; code
     pop bc
 lab871F djnz lab86EA
     ret 
-lab8722 ld hl,#c05c ; draw bottom border
+
+DrawBottomBorder ld hl,#c05c ; draw bottom border
     ld c,#38
     ld b,#1
     ld a,#fc
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#c05c
     ld c,#1
     ld b,#c0
     ld a,#fc
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#ff8c
     ld c,#38
     ld b,#1
     ld a,#3
-    call lab8899
+    call FillHorizontalBytes
     ld hl,#c093
     ld c,#1
     ld b,#c0
     ld a,#3
-    call lab8899
+    call FillHorizontalBytes
     ret 
-lab8753 push hl ; draw piece sprite
+
+DrawPieceSprite push hl ; draw piece sprite
     ld ix,lab8D86
     ld b,#7
     ld c,#1a
-    call lab8761
+    call SpriteRenderLoop
     pop hl
     ret 
-lab8761 push hl ; sprite render loop
+
+SpriteRenderLoop push hl ; sprite render loop
     ld d,b
 lab8763 ld a,(hl) ; code
     and (ix+0)
@@ -949,25 +980,26 @@ lab8763 ld a,(hl) ; code
     add hl,bc
     pop bc
 lab8780 dec c ; code
-    jr nz,lab8761
+    jr nz,SpriteRenderLoop
     ret 
-lab8784 ld a,l ; draw glyph string
-    ld (lab88EC),a
+
+DrawGlyphString ld a,l ; draw glyph string
+    ld (GlyphSourceAddressLow),a
     ld a,h
-    ld (lab88ED),a
+    ld (GlyphSourceAddressHigh),a
     ld a,e
-    ld (lab88EE),a
+    ld (GlyphDestAddressLow),a
     ld a,d
-    ld (lab88EF),a
+    ld (GlyphDestAddressHigh),a
     xor a
-    ld (lab88F0),a
-lab8798 ld a,(lab88EC) ; code
+    ld (GlyphColorPlaneIndex),a
+lab8798 ld a,(GlyphSourceAddressLow) ; code
     ld l,a
-    ld a,(lab88ED)
+    ld a,(GlyphSourceAddressHigh)
     ld h,a
-    ld a,(lab88EE)
+    ld a,(GlyphDestAddressLow)
     ld e,a
-    ld a,(lab88EF)
+    ld a,(GlyphDestAddressHigh)
     ld d,a
 lab87A8 ld a,(de)
     or a
@@ -975,20 +1007,21 @@ lab87A8 ld a,(de)
     ld c,a
     push de
     push hl
-    call lab87C7
+    call FindGlyphForCharacter
     pop hl
     ld de,#7
     add hl,de
     pop de
     inc de
     jr lab87A8
-lab87BB ld a,(lab88F0)
+lab87BB ld a,(GlyphColorPlaneIndex)
     inc a
-    ld (lab88F0),a
+    ld (GlyphColorPlaneIndex),a
     cp #3
     jr c,lab8798
     ret 
-lab87C7 ld ix,lab8EF2 ; find glyph for character
+
+FindGlyphForCharacter ld ix,lab8EF2 ; find glyph for character
 lab87CB ld a,(ix+0)
     or a
     ret z
@@ -999,7 +1032,7 @@ lab87CB ld a,(ix+0)
     jr lab87CB
 lab87DA inc ix
     xor a
-    ld (lab88F1),a
+    ld (GlyphRowCounter),a
     ld b,#7
 lab87E2 push bc
     push hl
@@ -1010,7 +1043,7 @@ lab87EA sla e
     jr nc,lab87F5
     push de
     push hl
-    call lab8813
+    call SpecialGlyphRender
     pop hl
     pop de
 lab87F5 inc hl
@@ -1022,20 +1055,21 @@ lab87F5 inc hl
     call lab8851
     call lab8851
     inc ix
-    ld a,(lab88F1)
+    ld a,(GlyphRowCounter)
     inc a
-    ld (lab88F1),a
+    ld (GlyphRowCounter),a
     pop bc
     djnz lab87E2
     ret 
-lab8813 ld a,(lab88F0) ; special glyph render
+
+SpecialGlyphRender ld a,(GlyphColorPlaneIndex) ; special glyph render
     or a
     jr z,lab883E
     cp #1
     jr z,lab8835
     inc hl
     call lab8851
-    ld a,(lab88F1)
+    ld a,(GlyphRowCounter)
     ld e,a
     ld d,#0
     push hl
@@ -1045,11 +1079,11 @@ lab8813 ld a,(lab88F0) ; special glyph render
     pop hl
     ld c,#1
     ld b,#4
-    jp lab8899
+    jp FillHorizontalBytes
 lab8835 ld a,#c3 ; cursor glyph
     ld c,#3
     ld b,#6
-    jp lab8899
+    jp FillHorizontalBytes
 lab883E inc hl ; erase glyph
     inc hl
     call lab8851
@@ -1058,7 +1092,7 @@ lab883E inc hl ; erase glyph
     xor a
     ld c,#3
     ld b,#6
-    jp lab8899
+    jp FillHorizontalBytes
 lab8851 ld a,h ; code
     add a,#8
     ld h,a
@@ -1068,7 +1102,8 @@ lab8851 ld a,h ; code
     add hl,bc
     pop bc
     ret 
-lab885D ld a,(de) ; draw vertical strip
+
+DrawVerticalStrip ld a,(de) ; draw vertical strip
     or a
     ret z
     ld c,a
@@ -1081,7 +1116,7 @@ lab885D ld a,(de) ; draw vertical strip
     inc hl
     pop de
     inc de
-    jr lab885D
+    jr DrawVerticalStrip
 lab886E ld ix,lab8F6D ; find glyph table entry
 lab8872 ld a,(ix+0) ; code
     or a
@@ -1104,7 +1139,8 @@ lab8885 ld a,(ix+0) ; code
     call lab8851
     djnz lab8885
     ret 
-lab8899 push bc ; fill horizontal bytes
+
+FillHorizontalBytes push bc ; fill horizontal bytes
     push hl
     ld d,c
 lab889C ld (hl),a
@@ -1121,9 +1157,10 @@ lab889C ld (hl),a
     ld de,#c050
     add hl,de
 lab88AE pop af
-    djnz lab8899
+    djnz FillHorizontalBytes
     ret 
-lab88B2 ld e,#18 ; xor mask update
+
+XorMaskUpdate ld e,#18 ; xor mask update
 lab88B4 push hl
     ld d,#6
 lab88B7 ld b,(ix+0)
@@ -1148,47 +1185,48 @@ lab88B7 ld b,(ix+0)
 lab88D2 dec e
     jr nz,lab88B4
     ret 
+
 defb 'ici commence le royaume des variables',0
 ; data: variables, board state, graphics and text tables
-lab88D6 DEFB #00 ; temp row counter (board draw init)
-lab88D7 DEFB #00 ; temp column counter (board draw init)
-lab88D8 DEFB #00 ; selected column / cursor (0-6)
-lab88D9 DEFB #01,#00,#00 ; current player (1/2)
-lab88DC DEFB #00 ; win direction row delta
-lab88DD DEFB #00 ; win direction column delta
-lab88DE DEFB #00 ; animation mask byte
-lab88DF DEFB #00 ; win animation counter
+TempRowCounter DEFB #00 ; temp row counter (board draw init)
+TempColumnCounter DEFB #00 ; temp column counter (board draw init)
+SelectedColumn DEFB #00 ; selected column / cursor (0-6)
+CurrentPlayer DEFB #01,#00,#00 ; current player (1/2)
+WinDirectionRowDelta DEFB #00 ; win direction row delta
+WinDirectionColumnDelta DEFB #00 ; win direction column delta
+AnimationMask DEFB #00 ; animation mask byte
+WinAnimationCounter DEFB #00 ; win animation counter
 nbPlayer DEFB #02 ; game mode (1=one player,2=two players)
 legacyDifficulty DEFB #02 ; difficulty (1=facile,2=difficile)
 newDifficulty defb 0
-lab88E2 DEFB #00 ; AI search mode
-lab88E3 DEFB #00 ; AI loop counter
-lab88E4 DEFB #00 ; AI column scan
-lab88E5 DEFB #00 ; AI candidate column
-lab88E6 DEFB #00 ; AI best column
-lab88E7 DEFB #00 ; AI saved row
-lab88E8 DEFB #00 ; AI saved column
-lab88E9 DEFB #00 ; AI empty count
-lab88EA DEFB #00 ; AI loop index
-lab88EB DEFB #00 ; render loop counter
-lab88EC DEFB #00 ; glyph render: source address low
-lab88ED DEFB #00 ; glyph render: source address high
-lab88EE DEFB #00 ; glyph render: dest address low
-lab88EF DEFB #00 ; glyph render: dest address high
-lab88F0 DEFB #00 ; glyph color plane index
-lab88F1 DEFB #00 ; glyph row counter
-lab88F2 DEFB #00 ; game over / win flag
-lab88F3 DEFB #00 ; moves played count
-lab88F4 DEFB #00 ; AI depth / fill count
-lab88F5 DEFB #00 ; last placed piece row
-lab88F6 DEFB #00 ; last placed piece column
-lab88F7 DEFB #00 ; AI step row delta
-lab88F8 DEFB #00 ; AI step column delta
-lab88F9 DEFB #00 ; AI test cell row
-lab88FA DEFB #00 ; AI test cell column
-lab88FB DEFB #01,#00,#00,#01,#01,#01 ; AI direction vector table (4 pairs)
-lab8901 DEFB #01,#ff,#01,#00,#00 ; sound data block
-lab8906 DEFB #00,#00,#00,#0c,#0a,#00 ; sound pointer temp
+AISearchMode DEFB #00 ; AI search mode
+AILoopCounter DEFB #00 ; AI loop counter
+AIColumnScan DEFB #00 ; AI column scan
+AICandidateColumn DEFB #00 ; AI candidate column
+AIBestColumn DEFB #00 ; AI best column
+AISavedRow DEFB #00 ; AI saved row
+AISavedColumn DEFB #00 ; AI saved column
+AIEmptyCount DEFB #00 ; AI empty count
+AILoopIndex DEFB #00 ; AI loop index
+RenderLoopCounter DEFB #00 ; render loop counter
+GlyphSourceAddressLow DEFB #00 ; glyph render: source address low
+GlyphSourceAddressHigh DEFB #00 ; glyph render: source address high
+GlyphDestAddressLow DEFB #00 ; glyph render: dest address low
+GlyphDestAddressHigh DEFB #00 ; glyph render: dest address high
+GlyphColorPlaneIndex DEFB #00 ; glyph color plane index
+GlyphRowCounter DEFB #00 ; glyph row counter
+GameOverWinFlag DEFB #00 ; game over / win flag
+MovesPlayedCount DEFB #00 ; moves played count
+AIFillCount DEFB #00 ; AI depth / fill count
+LastPlacedPieceRow DEFB #00 ; last placed piece row
+LastPlacedPieceColumn DEFB #00 ; last placed piece column
+AIStepRowDelta DEFB #00 ; AI step row delta
+AIStepColumnDelta DEFB #00 ; AI step column delta
+AITestCellRow DEFB #00 ; AI test cell row
+AITestCellColumn DEFB #00 ; AI test cell column
+AIDirectionVectors DEFB #01,#00,#00,#01,#01,#01 ; AI direction vector table (4 pairs)
+SoundDataBlock DEFB #01,#ff,#01,#00,#00 ; sound data block
+SoundPointerTemp DEFB #00,#00,#00,#0c,#0a,#00 ; sound pointer temp
 lab890C DEFB #00 ; board state array (6x7 cells)
 lab890D DEFB #00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00
     DEFB #00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00,#00
@@ -1216,7 +1254,7 @@ table_priorite_colonnes DEFB #03,#02,#04,#01,#05,#00 ; difficulty move priority 
 table_priorite_naive    defb 1,6,0,5,2,4,3
 
 
-lab8A15 DEFB #06,#ff,#00,#ff,#00,#ff,#00,#ff,#00,#ff,#00,#ff,#00,#ff,#00,#ff ; cursor and menu sprite masks
+CursorAndMenuSpriteMasks DEFB #06,#ff,#00,#ff,#00,#ff,#00,#ff,#00,#ff,#00,#ff,#00,#ff,#00,#ff ; cursor and menu sprite masks
     DEFB #00,#aa,#50,#55,#88,#ff,#00,#ff,#00,#ff,#00
 lab8A30 DEFB #ff,#00,#00
 lab8A33 DEFB #f0,#00,#f0,#ff,#00,#ff
