@@ -595,7 +595,7 @@ lab84B4 ld a,#2 ; computer (AI) move
 
 unSurDeux ld a,%10101010 : rlca : ld (unSurDeux+1),a : jr c,lab84F2 : jr tester_victoire_adversaire
 
-troisSurQuatre ld a,%10001000 : rlca : ld (unSurDeux+1),a : jr c,lab84F2 : jr tester_victoire_adversaire
+troisSurQuatre ld a,%10001000 : rlca : ld (troisSurQuatre+1),a : jr c,lab84F2 : jr tester_victoire_adversaire
 
 tester_victoire_adversaire
     xor a
