@@ -1,4 +1,4 @@
-# puissance4 Amstrad CPC game based on Claude work prompted by Orko Ready
+# Puissance 4 (Connect 4) for Amstrad CPC - Game based on Claude work prompted by Orko Ready
 
 Just wanted to try some slope tools for retro-engineering modifications
 
