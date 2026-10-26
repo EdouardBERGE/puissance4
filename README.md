@@ -6,6 +6,6 @@ Just wanted to try some slope tools for retro-engineering modifications
 
 Tools used : Disark, RASM, OpenCode
 
-LLM used : Beam, Grok
+LLM used : Beam, Grok, Claude
 
 
